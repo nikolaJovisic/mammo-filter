@@ -1,0 +1,23 @@
+model:
+  arch: vit_base
+  num_register_tokens: 4
+  patch_size: 14
+  drop_path_rate: 0.0
+  ffn_layer: mlp
+  weights: /lustre/mammo-filter/weights/dinov2_vitb14_reg4_pretrain.pth
+  layerscale: 1.0e-05
+  block_chunks: 0
+  qkv_bias: true
+  proj_bias: true
+  ffn_bias: true  
+  interpolate_antialias: false
+  interpolate_offset: 0.1
+  drop_path_uniform: true
+  img_size: 518
+  
+embeddings_dir: /lustre/mammo-filter/embeddings
+
+batch_size: 8
+
+run_name: lorem-ipsum
+run_description: "Lorem ipsum."
