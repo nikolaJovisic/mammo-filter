@@ -4,7 +4,7 @@ model:
   patch_size: 14
   drop_path_rate: 0.0
   ffn_layer: mlp
-  weights: /lustre/mammo-filter/weights/dinov2_vitb14_reg4_pretrain.pth
+  weights:  /lustre/mammo-filter/weights/dinov2_vitb14_reg4_pretrain.pth  #/home/nikola.jovisic.ivi/nj/mama-encoder/mama_embed_pretrained_40k_steps_last_dinov2_vit_ckpt.pth
   layerscale: 1.0e-05
   block_chunks: 0
   qkv_bias: true
@@ -15,9 +15,11 @@ model:
   drop_path_uniform: true
   img_size: 518
   
-embeddings_dir: /lustre/mammo-filter/embeddings
+embeddings_root: /home/nikola.jovisic.ivi/nj/lustre_mock/
 
 batch_size: 8
+img_loader_workers: 16
+tile_loader_workers: 16
 
 run_name: lorem-ipsum
 run_description: "Lorem ipsum."
