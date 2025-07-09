@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('../embedding_inference')
+
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 import torch
@@ -6,12 +10,35 @@ import torch.optim as optim
 import numpy as np
 import random
 from omegaconf import OmegaConf
-from embeddings_dataset import EmbeddingsDataset
-from utils.split_collate import split
-from utils.aggregation import aggregate
+from pathlib import Path
+from embedding_inference import EmbeddingsDataset
+from utils.split import split
+from utils.aggregation import aggregate, Aggregation
+from utils.evaluate import evaluate
+from utils.collate import collate
+
+def train_head(dataset_config, cfg=None, gpu_id=None):
+    if cfg is None:
+        cfg = load_cfg()
         
-def _train(train_dataset, valid_dataset, cfg):
-    model = nn.Linear(768, 1).to('cuda')
+    device = 'cuda'
+    
+    if gpu_id is not None:
+        torch.cuda.set_device(gpu_id)
+        device = f'{device}:{gpu_id}'
+        
+    dataset = EmbeddingsDataset(dataset_config, cfg.pos_weight)
+    
+    train_ds, valid_ds, test_ds = split(dataset, cfg.valid_size, cfg.test_size, 
+                                                cfg.train.aggregation is None)
+    
+    model = _train(train_ds, valid_ds, cfg.train, device)
+    specificity, sensitivity = evaluate(model, collate(test_ds, cfg.train.fw_batch_size), cfg.test_aggregation, device)
+    return specificity, sensitivity
+    
+        
+def _train(train_dataset, valid_dataset, cfg, device):
+    model = nn.Linear(768, 1).to(device)
     
     if cfg.load_path is not None:
         model.load_state_dict(torch.load(cfg.load_path))
@@ -26,12 +53,14 @@ def _train(train_dataset, valid_dataset, cfg):
     y_true_batch = []
     w_batch = []
 
-    for epoch in range(epochs):
+    for epoch in range(cfg.epochs):
+        print('Epoch:', epoch)
+        
         model.train()
         total_loss = 0
 
-        for x, y, w, group in train_dataset:
-            x, y, w, group = x.to('cuda'), y.to('cuda'), w.to('cuda'), group.to('cuda')
+        for x, y, w, group in collate(train_dataset, cfg.fw_batch_size):
+            x, y, w, group = x.to(device), y.to(device), w.to(device), group.to(device)
 
             logits = model(x)
             
@@ -81,7 +110,8 @@ def _train(train_dataset, valid_dataset, cfg):
                 y_pred_batch = y_pred_batch[num_to_use:]
                 y_true_batch = y_true_batch[num_to_use:]
                 w_batch = w_batch[num_to_use:]
-
+                
+#         print('Total loss:', total_loss)
         y_pred_batch = []
         y_true_batch = []
         w_batch = []
@@ -89,8 +119,8 @@ def _train(train_dataset, valid_dataset, cfg):
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for x, y, w, group in valid_dataset:
-                x, y, w, group = x.to('cuda'), y.to('cuda'), w.to('cuda'), group.to('cuda')
+            for x, y, w, group in collate(valid_dataset, cfg.fw_batch_size):
+                x, y, w, group = x.to(device), y.to(device), w.to(device), group.to(device)
 
                 logits = model(x)
                 
@@ -138,13 +168,14 @@ def _train(train_dataset, valid_dataset, cfg):
                     y_true_batch = y_true_batch[num_to_use:]
                     w_batch = w_batch[num_to_use:]
 
+#         print('Val loss:', val_loss)
         if val_loss < best_val_loss:
             best_val_loss = val_loss 
             best_model_state = model.state_dict()
             patience_counter = 0
         else:
             patience_counter += 1
-            if patience_counter >= patience:
+            if patience_counter >= cfg.patience:
                 break
 
     if cfg.save_path is not None:
@@ -153,17 +184,12 @@ def _train(train_dataset, valid_dataset, cfg):
     model.load_state_dict(best_model_state)
     return model
 
-def _load_cfg(cfg_path):
+def load_cfg(cfg_path=None):
     if cfg_path is None:
         cfg_path = Path(__file__).parent / "config.yaml"
-    return OmegaConf.load(cfg_path)
+    cfg = OmegaConf.load(cfg_path)
 
-def train_head(dataset_config, cfg_path=None)
-    cfg = _load_cfg(cfg_path)
-    dataset = EmbeddingDataset(dataset_config, cfg.pos_weight)
+    cfg.train.aggregation = Aggregation(cfg.train.aggregation)
+    cfg.test_aggregation = Aggregation(cfg.test_aggregation)
     
-    train_ds, valid_ds, test_ds = split_collate(dataset, cfg.valid_size, cfg.test_size, 
-                                                cfg.train.aggregation is None, cfg.fw_batch_size)
-    
-    model = _train(train_ds, valid_ds, cfg.train)
-    specificity, sensitivity = evaluate(model, test_ds, cfg.test_aggregation)
+    return cfg

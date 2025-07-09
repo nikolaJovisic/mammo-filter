@@ -1,10 +1,9 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset
-from flattened_group_subset import FlattenedGroupSubset
-from utils.collate import collate
+from utils.flattened_group_subset import FlattenedGroupSubset
 
-def split(dataset, valid_size, test_size, flatten, batch_size):
+def split(dataset, valid_size, test_size, flatten):
     labels = np.array([dataset[i][1].item() for i in range(len(dataset))])
 
     train_idx, temp_idx = train_test_split(
@@ -34,9 +33,5 @@ def split(dataset, valid_size, test_size, flatten, batch_size):
         valid_ds = Subset(dataset, val_idx)
         
     test_ds = Subset(dataset, test_idx)
-    
-    train_ds = collate(train_ds, batch_size)
-    valid_ds = collate(valid_ds, batch_size)
-    test_ds = collate(test_ds, batch_size)
     
     return train_ds, valid_ds, test_ds

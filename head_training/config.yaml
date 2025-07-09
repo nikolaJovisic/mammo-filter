@@ -1,15 +1,14 @@
-n_runs: 1
 valid_size: 0.15
 test_size: 0.15
 pos_weight: 1.5
-fw_batch_size: 128
 
 train:
+  fw_batch_size: 128
   bw_batch_size: 128
-  lr: 1e-3
+  lr: 1e-4
   weight_decay: 1e-4
-  epochs: 200
-  patience: 8
+  epochs: 300
+  patience: 20
   aggregation: mean
   load_path:
   save_path:

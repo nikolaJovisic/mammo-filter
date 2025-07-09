@@ -1,9 +1,9 @@
 import torch
 import numpy as np
 from sklearn.metrics import confusion_matrix
-from aggregation import aggregate
+from utils.aggregation import aggregate
 
-def evaluate(model, collated_dataset, aggregation):
+def evaluate(model, collated_dataset, aggregation, device):
     if aggregation is None:
         raise ValueError("No sense in not aggregating when testing!")
     
@@ -13,7 +13,7 @@ def evaluate(model, collated_dataset, aggregation):
 
     with torch.no_grad():
         for x, y, _, group in collated_dataset:
-            x, group = x.to('cuda'), group.to('cuda')
+            x, group = x.to(device), group.to(device)
             logits = model(x)
 
             logits = logits[group >= 0]
