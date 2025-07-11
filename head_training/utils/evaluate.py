@@ -1,9 +1,11 @@
 import torch
 import numpy as np
 from sklearn.metrics import confusion_matrix
-from utils.aggregation import aggregate
+from utils.aggregation import aggregate, Aggregation
+from utils.collate import collate
 
-def evaluate(model, collated_dataset, aggregation, device):
+def _evaluate_one_agg(model, dataset, batch_size, aggregation, device):
+    dataset = collate(dataset, batch_size)
     if aggregation is None:
         raise ValueError("No sense in not aggregating when testing!")
     
@@ -12,7 +14,7 @@ def evaluate(model, collated_dataset, aggregation, device):
     all_labels = []
 
     with torch.no_grad():
-        for x, y, _, group in collated_dataset:
+        for x, y, _, group in dataset:
             x, group = x.to(device), group.to(device)
             logits = model(x)
 
@@ -36,3 +38,9 @@ def evaluate(model, collated_dataset, aggregation, device):
     balanced_cm = cm / row_sums
 
     return np.diag(balanced_cm)
+
+def evaluate(model, dataset, batch_size, device):
+    mean_agg = _evaluate_one_agg(model, dataset, batch_size, Aggregation.MEAN, device)
+    max_agg = _evaluate_one_agg(model, dataset, batch_size, Aggregation.MAX, device)
+    return *mean_agg, *max_agg
+    

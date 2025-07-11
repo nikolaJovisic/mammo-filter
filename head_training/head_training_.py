@@ -17,7 +17,7 @@ from utils.aggregation import aggregate, Aggregation
 from utils.evaluate import evaluate
 from utils.collate import collate
 
-def train_head(dataset_config, cfg=None, gpu_id=None):
+def train_head(dataset_config, cfg=None, gpu_id=None, just_evaluate=False):
     if cfg is None:
         cfg = load_cfg()
         
@@ -32,16 +32,20 @@ def train_head(dataset_config, cfg=None, gpu_id=None):
     train_ds, valid_ds, test_ds = split(dataset, cfg.valid_size, cfg.test_size, 
                                                 cfg.train.aggregation is None)
     
-    model = _train(train_ds, valid_ds, cfg.train, device)
-    specificity, sensitivity = evaluate(model, collate(test_ds, cfg.train.fw_batch_size), cfg.test_aggregation, device)
-    return specificity, sensitivity
+    model = _train(train_ds, valid_ds, cfg.train, device, just_evaluate)
+    return evaluate(model, test_ds, cfg.train.fw_batch_size, device)
     
         
-def _train(train_dataset, valid_dataset, cfg, device):
+def _train(train_dataset, valid_dataset, cfg, device, just_evaluate):
     model = nn.Linear(768, 1).to(device)
-    
     if cfg.load_path is not None:
         model.load_state_dict(torch.load(cfg.load_path))
+        print(f'Model loaded from {cfg.load_path}.')
+    
+    if just_evaluate:
+        if cfg.load_path is None:
+            raise ValueError("Cannot evaluate without load_path!")
+        return model
     
     optimizer = optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     criterion = nn.BCEWithLogitsLoss(reduction='none')
@@ -111,7 +115,7 @@ def _train(train_dataset, valid_dataset, cfg, device):
                 y_true_batch = y_true_batch[num_to_use:]
                 w_batch = w_batch[num_to_use:]
                 
-#         print('Total loss:', total_loss)
+        print('Total loss:', total_loss)
         y_pred_batch = []
         y_true_batch = []
         w_batch = []
@@ -168,7 +172,7 @@ def _train(train_dataset, valid_dataset, cfg, device):
                     y_true_batch = y_true_batch[num_to_use:]
                     w_batch = w_batch[num_to_use:]
 
-#         print('Val loss:', val_loss)
+        print('Val loss:', val_loss)
         if val_loss < best_val_loss:
             best_val_loss = val_loss 
             best_model_state = model.state_dict()
@@ -180,6 +184,7 @@ def _train(train_dataset, valid_dataset, cfg, device):
 
     if cfg.save_path is not None:
         torch.save(best_model_state, cfg.save_path)
+        print(f'Model saved to {cfg.save_path}.')
         
     model.load_state_dict(best_model_state)
     return model
@@ -190,6 +195,5 @@ def load_cfg(cfg_path=None):
     cfg = OmegaConf.load(cfg_path)
 
     cfg.train.aggregation = Aggregation(cfg.train.aggregation)
-    cfg.test_aggregation = Aggregation(cfg.test_aggregation)
     
     return cfg

@@ -27,19 +27,18 @@ merged = {
 
 dataset_configs = {
     'embed': embed,
-    'vindr': vindr,
-    'csaw': csaw,
-    'rsna': rsna,
-    'merged': merged
+#     'vindr': vindr,
+#     'csaw': csaw,
+#     'rsna': rsna,
+#     'merged': merged
 }
 
 aggregations = [None, Aggregation.MAX, Aggregation.MEAN]
-test_aggregations = [Aggregation.MAX, Aggregation.MEAN]
-pos_weights = [1, 1.5, 2]
+pos_weights = [1, 1.5]
 batch_sizes = [128, 256, 512]
-lrs = [5e-4, 1e-3, 5e-3]
+lrs = [5e-2, 1e-3, 5e-3]
 
-def run_training(aggregation, test_aggregation, gpu_id):
+def run_training(aggregation, pos_weight, gpu_id):
     import torch
     torch.cuda.set_device(gpu_id)
 
@@ -53,43 +52,53 @@ def run_training(aggregation, test_aggregation, gpu_id):
             'dataset_config_name', 'specificity', 'sensitivity'
         ])
 
-    for pos_weight in pos_weights:
-        for batch_size in batch_sizes:
-            for lr in lrs:
-                scaled_lr = lr * (batch_size // 128)
-                for dataset_config_name in dataset_configs:
-                    cfg.aggregation = aggregation
-                    cfg.test_aggregation = test_aggregation
-                    cfg.pos_weight = pos_weight
-                    cfg.fw_batch_size = batch_size
-                    cfg.bw_batch_size = batch_size
-                    cfg.lr = scaled_lr
+    for batch_size in batch_sizes:
+        for lr in lrs:
+            scaled_lr = lr * (batch_size // 128)
+            for dataset_config_name in dataset_configs:
+                cfg.train.aggregation = aggregation
+                cfg.pos_weight = pos_weight
+                cfg.train.fw_batch_size = batch_size
+                cfg.train.bw_batch_size = batch_size
+                cfg.train.lr = scaled_lr
 
-                    specificity, sensitivity = train_head(
-                        dataset_configs[dataset_config_name],
-                        cfg,
-                        gpu_id
-                    )
+                specificity_mean_agg, sensitivity_mean_agg, specificity_max_agg, sensitivity_max_agg = train_head(
+                    dataset_configs[dataset_config_name],
+                    cfg,
+                    gpu_id
+                )
 
-                    row = [
-                        aggregation.name if aggregation else None,
-                        test_aggregation.name,
-                        pos_weight,
-                        batch_size,
-                        scaled_lr,
-                        dataset_config_name,
-                        specificity,
-                        sensitivity
-                    ]
+                row_mean = [
+                    aggregation.name if aggregation else None,
+                    'MEAN',
+                    pos_weight,
+                    batch_size,
+                    scaled_lr,
+                    dataset_config_name,
+                    specificity_mean_agg,
+                    sensitivity_mean_agg
+                ]
+                
+                row_max = [
+                    aggregation.name if aggregation else None,
+                    'MAX',
+                    pos_weight,
+                    batch_size,
+                    scaled_lr,
+                    dataset_config_name,
+                    specificity_max_agg,
+                    sensitivity_max_agg
+                ]
 
-                    with open(output_file, mode='a', newline='') as file:
-                        writer = csv.writer(file)
-                        writer.writerow(row)
+                with open(output_file, mode='a', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(row_mean)
+                    writer.writerow(row_max)
 
 if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)
 
-    agg_test_combos = list(itertools.product(aggregations, test_aggregations))
+    agg_test_combos = list(itertools.product(aggregations, pos_weights))
 
     processes = []
     for i, (agg, test_agg) in enumerate(agg_test_combos):

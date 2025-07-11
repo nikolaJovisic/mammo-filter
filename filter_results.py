@@ -20,5 +20,6 @@ for dataset_name, group in df.groupby('dataset_config_name'):
     filtered_rows.append(df.loc[keep_indices])
 
 filtered_df = pd.concat(filtered_rows, ignore_index=True)
+#filtered_df = filtered_df[filtered_df['sensitivity'] >= 0.95]
 
 filtered_df.to_csv("results_filtered.csv", index=False)
